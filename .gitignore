@@ -25,4 +25,7 @@ go.work
 .idea
 
 # rigour binary
-scanner/rigour
+rigour/rigour
+
+# env
+.env

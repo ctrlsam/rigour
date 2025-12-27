@@ -1,26 +1,67 @@
 services:
+  # ============================================
+  # Kafka
+  # ============================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
   kafka:
-    image: confluentinc/cp-kafka:latest
-    hostname: kafka
+    image: confluentinc/cp-kafka:7.3.1
     container_name: kafka
+    depends_on:
+      - zookeeper
     ports:
       - "9092:9092"
-      - "9093:9093"
+      - "29092:29092"
     environment:
-      KAFKA_KRAFT_MODE: "true"  # Enables KRaft mode.
-      KAFKA_PROCESS_ROLES: controller,broker  # Kafka acts as both controller and broker.
-      KAFKA_NODE_ID: 1  # Unique ID for the Kafka instance.
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"  # Controller quorum.
-      KAFKA_LISTENERS: PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LOG_DIRS: /var/lib/kafka/data  # Log storage location.
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # Enables automatic topic creation.
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # Single replica for simplicity.
-      KAFKA_LOG_RETENTION_HOURS: 168  # Log retention period (7 days).
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0  # No rebalance delay.
-      CLUSTER_ID: "Mk3OEYBSD34fcwNTJENDM2Qk"  # Unique Kafka cluster ID.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "9000:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: disabled
+
+  # ============================================
+  # Atlas (GeoIP Database)
+  # ============================================
+
+  go-geo-ip:
+    image: hibare/go-geo-ip:latest
+    container_name: go-geo-ip
+    ports:
+      - "5000:5000"
+    environment:
+      DB_LICENSE_KEY: ${MINDMAX_LICENSE_KEY}
+      API_KEYS: mykey
+
+  # ============================================
+  # MongoDB
+  # ============================================
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
     volumes:
-      - ./data:/var/lib/kafka/data  # Maps logs to local storage.
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

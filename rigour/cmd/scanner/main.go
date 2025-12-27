@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -9,9 +10,10 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ctrlsam/rigour/pkg/discovery"
-	"github.com/ctrlsam/rigour/pkg/fingerprint"
+	"github.com/ctrlsam/rigour/internal/messaging/kafka"
 	"github.com/ctrlsam/rigour/pkg/scanner"
+	"github.com/ctrlsam/rigour/pkg/scanner/discovery"
+	"github.com/ctrlsam/rigour/pkg/scanner/fingerprint"
 	"github.com/spf13/cobra"
 )
 
@@ -20,9 +22,12 @@ type cliConfig struct {
 	timeout  int
 	useUDP   bool
 	verbose  bool
-	stream   bool
 
-	// Discovery Naabu settings
+	// Kafka output
+	kafkaBrokers string
+	kafkaTopic   string
+
+	// Discovery settings
 	scanType string
 	ports    string
 	topPorts string
@@ -42,25 +47,42 @@ var (
 			}
 
 			cidrRange := args[0]
+			ipCount := getCIDRRangeSize(cidrRange)
+			fmt.Printf("Starting scan of %d IPs in range %s\n", ipCount, cidrRange)
 
-			// Quick estimate of number of IPs in the range.
-			_, ipnet, _ := net.ParseCIDR(cidrRange)
-			ones, bits := ipnet.Mask.Size()
-			numIPs := 1 << (bits - ones)
-			fmt.Printf("[+] Scanning %d IPs in range %s\n", numIPs, cidrRange)
+			// Initialize Kafka producer
+			producer, err := kafka.NewProducer(kafka.ProducerConfig{
+				Brokers: config.kafkaBrokers,
+				Topic:   config.kafkaTopic,
+			})
+			if err != nil {
+				return err
+			}
+			defer func() { _ = producer.Close() }()
 
-			onEvent := func(ev scanner.ScanEvent) {
-				b, err := json.MarshalIndent(ev, "", "  ")
+			onEvent := func(ev scanner.ScannedServiceEvent) {
+				// Encode once and reuse for both outputs.
+				serializedEvent, err := json.Marshal(ev)
 				if err != nil {
 					// Streaming should never abort the whole scan due to a single marshal failure.
 					fmt.Fprintf(os.Stderr, "failed to marshal event: %v\n", err)
 					return
 				}
-				// Print one pretty JSON object at a time.
-				_, _ = os.Stdout.Write(append(b, '\n'))
+
+				// Key by IP:port for stable partitioning.
+				key := []byte(fmt.Sprintf("%s:%d", ev.IP, ev.Port))
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err = producer.PublishBytes(ctx, key, serializedEvent)
+				cancel()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "failed to publish kafka event: %v\n", err)
+				}
+
+				// NDJSON output.
+				_, _ = os.Stdout.Write(append(serializedEvent, '\n'))
 			}
 
-			err := scanner.ScanTargetWithDiscoveryStream(cidrRange, createDiscoveryConfig(config), createScanConfig(config), onEvent)
+			err = scanner.ScanTargetWithDiscoveryStream(cidrRange, createDiscoveryConfig(config), createScanConfig(config), onEvent)
 			if err != nil {
 				return fmt.Errorf("Failed running discovery+scan stream (%w)", err)
 			}
@@ -68,27 +90,6 @@ var (
 		},
 	}
 )
-
-func init() {
-	rootCmd.CompletionOptions.DisableDefaultCmd = true
-	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
-
-	rootCmd.PersistentFlags().BoolVarP(&config.fastMode, "fast", "f", false, "fast mode")
-	rootCmd.PersistentFlags().
-		BoolVarP(&config.useUDP, "udp", "U", false, "run UDP plugins")
-
-	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
-	rootCmd.PersistentFlags().BoolVar(&config.stream, "stream", true, "stream results as NDJSON as services are identified")
-	rootCmd.PersistentFlags().
-		IntVarP(&config.timeout, "timeout", "w", 2000, "timeout (milliseconds)")
-
-	// Discovery flags (Naabu). These control how rigour discovers open ports.
-	rootCmd.PersistentFlags().StringVar(&config.scanType, "scan-type", "c", "discovery scan type (naabu; e.g. c=connect)")
-	rootCmd.PersistentFlags().StringVar(&config.ports, "ports", "", "ports list (e.g. 80,443). If set, overrides top ports")
-	rootCmd.PersistentFlags().StringVar(&config.topPorts, "top-ports", "100", "top ports (e.g. 100, 1000, full)") // full
-	rootCmd.PersistentFlags().IntVar(&config.retries, "retries", 3, "discovery retries")
-	rootCmd.PersistentFlags().IntVar(&config.rate, "rate", 50_000, "discovery rate (packets per second)")
-}
 
 func checkConfig(config cliConfig) error {
 	if config.useUDP && config.verbose {
@@ -102,6 +103,13 @@ func checkConfig(config cliConfig) error {
 	}
 
 	return nil
+}
+
+func getCIDRRangeSize(cidr string) int {
+	_, ipnet, _ := net.ParseCIDR(cidr)
+	ones, bits := ipnet.Mask.Size()
+	numIPs := 1 << (bits - ones)
+	return numIPs
 }
 
 func createScanConfig(config cliConfig) fingerprint.FingerprintConfig {
@@ -121,6 +129,30 @@ func createDiscoveryConfig(config cliConfig) discovery.DiscoveryConfig {
 		Retries:  config.retries,
 		Rate:     config.rate,
 	}
+}
+
+func init() {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
+
+	rootCmd.PersistentFlags().BoolVarP(&config.fastMode, "fast", "f", false, "fast mode")
+	rootCmd.PersistentFlags().
+		BoolVarP(&config.useUDP, "udp", "U", false, "run UDP plugins")
+
+	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
+	rootCmd.PersistentFlags().
+		IntVarP(&config.timeout, "timeout", "w", 2000, "timeout (milliseconds)")
+
+	// Kafka output flags
+	rootCmd.PersistentFlags().StringVar(&config.kafkaBrokers, "kafka-brokers", "localhost:29092", "Kafka brokers (comma-separated host:port)")
+	rootCmd.PersistentFlags().StringVar(&config.kafkaTopic, "kafka-topic", "rigour.scanner.service", "Kafka topic")
+
+	// Discovery flags - These control how rigour discovers open ports.
+	rootCmd.PersistentFlags().StringVar(&config.scanType, "scan-type", "c", "discovery scan type (naabu; e.g. c=connect)")
+	rootCmd.PersistentFlags().StringVar(&config.ports, "ports", "", "ports list (e.g. 80,443). If set, overrides top ports")
+	rootCmd.PersistentFlags().StringVar(&config.topPorts, "top-ports", "100", "top ports (e.g. 100, 1000, full)") // full
+	rootCmd.PersistentFlags().IntVar(&config.retries, "retries", 3, "discovery retries")
+	rootCmd.PersistentFlags().IntVar(&config.rate, "rate", 50_000, "discovery rate (packets per second)")
 }
 
 func main() {
