@@ -1,32 +1,6 @@
 package api
 
-import (
-	"encoding/json"
-	"time"
-
-	"github.com/ctrlsam/rigour/internal/geoip"
-)
-
-// Service represents a single service discovered on a host.
-type Service struct {
-	Port      int             `json:"port"`
-	Protocol  string          `json:"protocol"`
-	TLS       bool            `json:"tls"`
-	Transport string          `json:"transport"`
-	Metadata  json.RawMessage `json:"metadata,omitempty"`
-	Timestamp time.Time       `json:"timestamp"`
-}
-
-// Host represents a scanned host with its associated services and metadata.
-type Host struct {
-	ID        string             `json:"id"`
-	IP        string             `json:"ip"`
-	Country   string             `json:"country,omitempty"`
-	ASN       string             `json:"asn,omitempty"`
-	Services  []Service          `json:"services,omitempty"`
-	GeoIP     *geoip.GeoIPRecord `json:"geoip,omitempty"`
-	Timestamp time.Time          `json:"timestamp"`
-}
+import "github.com/ctrlsam/rigour/pkg/types"
 
 // SearchRequest represents a search query request.
 type SearchRequest struct {
@@ -37,7 +11,7 @@ type SearchRequest struct {
 
 // SearchResponse represents the response for a search query.
 type SearchResponse struct {
-	Hosts         []Host       `json:"hosts"`
+	Hosts         []types.Host `json:"hosts"`
 	Facets        *FacetCounts `json:"facets,omitempty"`
 	NextPageToken string       `json:"next_page_token,omitempty"`
 }

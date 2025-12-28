@@ -1,0 +1,43 @@
+package fingerprint
+
+// These import statements ensure that the init functions run in each plugin.
+// When a new plugin is added, this list should be updated.
+
+import (
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/dhcp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/dns"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/echo"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ftp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/http"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/imap"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ipmi"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ipsec"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/jdwp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/kafka/kafkaNew"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/kafka/kafkaOld"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ldap"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/linuxrpc"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/minecraft/java"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/modbus"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/mqtt/mqtt3"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/mqtt/mqtt5"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/mssql"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/mysql"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/netbios"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ntp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/openvpn"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/oracledb"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/pop3"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/postgresql"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/rdp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/redis"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/rsync"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/rtsp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/smb"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/smtp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/snmp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/ssh"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/stun"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/telnet"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/vnc"
+)

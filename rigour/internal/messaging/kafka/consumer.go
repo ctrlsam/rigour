@@ -21,8 +21,6 @@ type Consumer struct {
 	reader *kafka.Reader
 }
 
-var _ messaging.Consumer = (*Consumer)(nil)
-
 func (c ConsumerConfig) Validate() error {
 	if len(c.Brokers) == 0 {
 		return errors.New("kafka: brokers is empty")
@@ -65,22 +63,13 @@ func (c *Consumer) Close() error {
 	return c.reader.Close()
 }
 
-func (c *Consumer) FetchMessage(ctx context.Context) (*messaging.Message, error) {
-	if c == nil || c.reader == nil {
-		return nil, errors.New("kafka: consumer is nil")
-	}
-	m, err := c.reader.FetchMessage(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &messaging.Message{Key: m.Key, Value: m.Value}, nil
-}
-
 // TypedConsumer[T] wraps a Consumer and automatically unmarshals messages to type T.
 type TypedConsumer[T any] struct {
 	consumer *Consumer
 	codec    messaging.Codec[T]
 }
+
+var _ messaging.Consumer[any] = (*TypedConsumer[any])(nil)
 
 // NewTypedConsumer creates a new consumer that parses messages to type T.
 func NewTypedConsumer[T any](cfg ConsumerConfig) (*TypedConsumer[T], error) {
@@ -94,13 +83,16 @@ func NewTypedConsumer[T any](cfg ConsumerConfig) (*TypedConsumer[T], error) {
 	}, nil
 }
 
-// FetchMessage fetches and parses a message to type T.
-func (tc *TypedConsumer[T]) FetchMessage(ctx context.Context) (*messaging.TypedMessage[T], error) {
+// Fetch fetches and parses a message to type T.
+func (tc *TypedConsumer[T]) Fetch(ctx context.Context) (*messaging.TypedMessage[T], error) {
 	if tc == nil || tc.consumer == nil {
 		return nil, errors.New("kafka: typed consumer is nil")
 	}
+	if tc.consumer.reader == nil {
+		return nil, errors.New("kafka: consumer is nil")
+	}
 
-	m, err := tc.consumer.FetchMessage(ctx)
+	m, err := tc.consumer.reader.FetchMessage(ctx)
 	if err != nil {
 		return nil, err
 	}

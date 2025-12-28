@@ -7,10 +7,8 @@ import (
 )
 
 const (
-	// DefaultPageSize is the default number of results per page
 	DefaultPageSize = 50
-	// MaxPageSize is the maximum allowed page size
-	MaxPageSize = 500
+	MaxPageSize     = 500
 )
 
 // EncodePaginationToken encodes a pagination token to a base64 string.

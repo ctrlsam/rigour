@@ -1,0 +1,38 @@
+package openvpn
+
+import (
+	"testing"
+
+	"github.com/ctrlsam/rigour/pkg/crawler/test"
+)
+
+func TestOpenVPN(t *testing.T) {
+	// the Privileged container does not run on Github actions -- but this test passes locally
+	testcases := []test.Testcase{
+		// 	{
+		// 		Description: "openvpn",
+		// 		Port:        1194,
+		// 		Protocol:    plugins.UDP,
+		// 		Expected: func(res *plugins.PluginResults) bool {
+		// 			return res != nil
+		// 		},
+		// 		RunConfig: dockertest.RunOptions{
+		// 			Repository: "jpetazzo/dockvpn",
+		// 			Privileged: true,
+		// 		},
+		// 	},
+	}
+
+	var p *Plugin
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.Description, func(t *testing.T) {
+			t.Parallel()
+			err := test.RunTest(t, tc, p)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+		})
+	}
+}

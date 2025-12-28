@@ -62,7 +62,7 @@ func runServer(ctx context.Context) error {
 	defer mongoClient.Close(context.Background())
 
 	// Create repository
-	repository, err := mongoClient.NewRepository(connectCtx, storage.RepositoryConfig{
+	repository, err := mongoClient.NewHostsRepository(connectCtx, storage.RepositoryConfig{
 		Database:   config.database,
 		Collection: config.collection,
 		Timeout:    10,

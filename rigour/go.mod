@@ -56,6 +56,7 @@ require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/gaissmai/bart v0.26.0 // indirect
+	github.com/go-chi/cors v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect

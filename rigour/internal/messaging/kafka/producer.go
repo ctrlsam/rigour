@@ -19,8 +19,6 @@ type Producer struct {
 	writer *kafka.Writer
 }
 
-var _ messaging.Producer = (*Producer)(nil)
-
 func (c ProducerConfig) Validate() error {
 	if len(c.Brokers) == 0 {
 		return errors.New("kafka: brokers is empty")
@@ -63,23 +61,13 @@ func (producer *Producer) Close() error {
 	return producer.writer.Close()
 }
 
-func (producer *Producer) PublishBytes(ctx context.Context, key []byte, value []byte) error {
-	if producer == nil || producer.writer == nil {
-		return errors.New("kafka: producer is nil")
-	}
-	return producer.writer.WriteMessages(ctx,
-		kafka.Message{
-			Key:   key,
-			Value: value,
-		},
-	)
-}
-
 // TypedProducer[T] wraps a Producer and automatically marshals messages of type T.
 type TypedProducer[T any] struct {
 	producer *Producer
 	codec    messaging.Codec[T]
 }
+
+var _ messaging.Producer[any] = (*TypedProducer[any])(nil)
 
 // NewTypedProducer creates a new producer that serializes messages of type T.
 func NewTypedProducer[T any](cfg ProducerConfig) (*TypedProducer[T], error) {
@@ -93,8 +81,8 @@ func NewTypedProducer[T any](cfg ProducerConfig) (*TypedProducer[T], error) {
 	}, nil
 }
 
-// PublishMessage publishes and serializes a message of type T.
-func (tp *TypedProducer[T]) PublishMessage(ctx context.Context, key []byte, value T) error {
+// Publish publishes and serializes a message of type T.
+func (tp *TypedProducer[T]) Publish(ctx context.Context, key []byte, value T) error {
 	if tp == nil || tp.producer == nil {
 		return errors.New("kafka: typed producer is nil")
 	}
@@ -104,7 +92,12 @@ func (tp *TypedProducer[T]) PublishMessage(ctx context.Context, key []byte, valu
 		return err
 	}
 
-	return tp.producer.PublishBytes(ctx, key, serialized)
+	if tp.producer.writer == nil {
+		return errors.New("kafka: producer is nil")
+	}
+	return tp.producer.writer.WriteMessages(ctx,
+		kafka.Message{Key: key, Value: serialized},
+	)
 }
 
 // Close closes the underlying producer.

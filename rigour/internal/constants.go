@@ -2,9 +2,9 @@ package internal
 
 const (
 	// Database Constants
-	DatabaseName       = "rigour"
-	CollectionServices = "hosts"
+	DatabaseName        = "rigour"
+	HostsRepositoryName = "hosts"
 
 	// Kafka Constants
-	KafkaTopicScannedServices = "rigour.scanner.service"
+	KafkaTopicScannedServices = "rigour.crawler.service"
 )

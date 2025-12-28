@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(repository storage.ServiceRepository) *Handler {
+func NewHandler(repository storage.HostRepository) *Handler {
 	return &Handler{
 		queryHandler: NewQueryHandler(repository),
 	}
@@ -71,7 +71,7 @@ func (handler *Handler) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Build response
 	resp := apimodels.SearchResponse{
-		Hosts: toAPIHosts(hosts),
+		Hosts: hosts,
 	}
 
 	// Generate next page token if there are more results
@@ -84,6 +84,25 @@ func (handler *Handler) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return response
 	render.JSON(w, r, resp)
+}
+
+// GetHostHandler handles GET /api/hosts/{ip} requests.
+func (handler *Handler) GetHostHandler(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if ip == "" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{"error": "IP address is required"})
+		return
+	}
+
+	host, err := handler.queryHandler.GetByIP(r.Context(), ip)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, map[string]string{"error": err.Error()})
+		return
+	}
+
+	render.JSON(w, r, host)
 }
 
 // FacetsHandler handles GET /api/facets requests.
@@ -123,47 +142,4 @@ func (handler *Handler) FacetsHandler(w http.ResponseWriter, r *http.Request) {
 // HealthHandler handles GET /health requests.
 func (handler *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, map[string]string{"status": "ok"})
-}
-
-// toAPIHosts converts storage.Host to apimodels.Host
-func toAPIHosts(hosts []storage.Host) []apimodels.Host {
-	result := make([]apimodels.Host, len(hosts))
-	for i, h := range hosts {
-		country := h.Country
-		asn := h.ASN
-		if h.GeoIP != nil {
-			if h.GeoIP.Country != "" {
-				country = h.GeoIP.Country
-			}
-			if h.GeoIP.ASN != 0 {
-				asn = fmt.Sprintf("%d", h.GeoIP.ASN)
-			}
-		}
-		result[i] = apimodels.Host{
-			ID:        h.ID,
-			IP:        h.IP,
-			Country:   country,
-			ASN:       asn,
-			Services:  convertServices(h.Services),
-			GeoIP:     h.GeoIP,
-			Timestamp: h.Timestamp,
-		}
-	}
-	return result
-}
-
-// convertServices converts storage.Service to apimodels.Service
-func convertServices(services []storage.Service) []apimodels.Service {
-	result := make([]apimodels.Service, len(services))
-	for i, s := range services {
-		result[i] = apimodels.Service{
-			Port:      s.Port,
-			Protocol:  s.Protocol,
-			TLS:       s.TLS,
-			Transport: s.Transport,
-			Metadata:  s.Metadata,
-			Timestamp: s.Timestamp,
-		}
-	}
-	return result
 }
