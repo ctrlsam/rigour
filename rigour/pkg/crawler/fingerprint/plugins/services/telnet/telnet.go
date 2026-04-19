@@ -283,3 +283,7 @@ func (p *TELNETPlugin) Type() plugins.Protocol {
 func (p *TELNETPlugin) Priority() int {
 	return 4
 }
+
+func (p *TELNETPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) > 0 && banner[0] == IAC
+}

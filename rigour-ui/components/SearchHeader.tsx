@@ -1,9 +1,9 @@
 'use client';
 
-import { Search, Github } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 interface SearchHeaderProps {
@@ -13,6 +13,7 @@ interface SearchHeaderProps {
 export function SearchHeader({ initialQuery = '' }: SearchHeaderProps) {
   const [query, setQuery] = useState(initialQuery);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Parse query syntax like "field: value" into filter parameters
   const parseQuery = (queryString: string): Record<string, string> | null => {
@@ -28,13 +29,20 @@ export function SearchHeader({ initialQuery = '' }: SearchHeaderProps) {
   };
 
   const handleSearch = () => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
+
+    // Reset pagination and previous search filters
+    params.delete('page');
+    params.delete('page_token');
+    params.delete('filter');
+    params.delete('query');
+
+    // Facet params (countries, asns, services) are preserved from searchParams
 
     if (query) {
+      params.set('query', query);
       const parsedParams = parseQuery(query);
-
       if (parsedParams) {
-        // Use parsed filter as query parameter
         for (const [key, value] of Object.entries(parsedParams)) {
           params.append('filter', JSON.stringify({ [key]: value }));
         }
@@ -52,20 +60,6 @@ export function SearchHeader({ initialQuery = '' }: SearchHeaderProps) {
 
   return (
     <header className="space-y-6">
-      <div className="flex items-center justify-between border-b border-border pb-6">
-        <h1 className="tracking-tighter text-foreground" style={{ fontFamily: 'Space Grotesk, monospace', fontSize: '3rem', fontWeight: 700, letterSpacing: '-0.05em' }}>
-          RIGOUR
-        </h1>
-        <a
-          href="https://github.com/ctrlsam/rigour"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Github className="h-6 w-6" />
-        </a>
-      </div>
-
       <div className="space-y-2">
         <p className="text-muted-foreground uppercase tracking-wider text-sm">
           Internet-Connected Device Intelligence Platform

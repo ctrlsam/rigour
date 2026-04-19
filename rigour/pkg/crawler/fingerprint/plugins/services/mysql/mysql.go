@@ -105,6 +105,10 @@ func (p *MYSQLPlugin) Priority() int {
 	return 133
 }
 
+func (p *MYSQLPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) >= 5 && (banner[4] == 0x0a || banner[4] == 0xff)
+}
+
 // CheckErrorMessagePacket checks the response packet error message
 func CheckErrorMessagePacket(response []byte) (string, int, error) {
 	// My brief research suggests that its not possible to get a compliant

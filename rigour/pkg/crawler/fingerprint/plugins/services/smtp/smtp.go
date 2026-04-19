@@ -183,6 +183,10 @@ func (p *SMTPPlugin) Priority() int {
 	return 60
 }
 
+func (p *SMTPPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) >= 3 && (banner[0] == '2' || banner[0] == '4' || banner[0] == '5') && banner[1] >= '0' && banner[1] <= '9' && banner[2] >= '0' && banner[2] <= '9'
+}
+
 func (p *TLSPlugin) Priority() int {
 	return 61
 }

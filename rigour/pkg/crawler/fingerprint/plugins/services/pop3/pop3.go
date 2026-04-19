@@ -122,6 +122,11 @@ func (p *POP3Plugin) Priority() int {
 	return 120
 }
 
+func (p *POP3Plugin) MatchBanner(banner []byte) bool {
+	s := string(banner)
+	return strings.HasPrefix(s, "+OK") || strings.HasPrefix(s, "-ERR")
+}
+
 func (p *TLSPlugin) Priority() int {
 	return 122
 }

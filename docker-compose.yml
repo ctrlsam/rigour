@@ -1,37 +1,42 @@
 services:
-  crawler:
-    build:
-      context: ./rigour
-      dockerfile: Dockerfile.crawler
-    container_name: rigour-crawler
-    depends_on:
-      kafka:
-        condition: service_healthy
-    command:
-      - "${CRAWLER_CIDR:-0.0.0.0/0}"
-      - "--kafka-brokers"
-      - "kafka:9092"
-      - "--top-ports"
-      - "${CRAWLER_DISCOVERY_TOP_PORTS:-1000}"
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
     networks:
       - rigour-network
     restart: unless-stopped
 
-  persistence:
+  geoipupdate:
+    container_name: geoipupdate
+    image: ghcr.io/maxmind/geoipupdate
+    restart: unless-stopped
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY}
+      - 'GEOIPUPDATE_EDITION_IDS=GeoLite2-ASN GeoLite2-City'
+      - GEOIPUPDATE_FREQUENCY=72
+    volumes:
+      - geoipupdate_data:/usr/share/GeoIP
+    networks:
+      - rigour-network
+
+  server:
     build:
       context: ./rigour
-      dockerfile: Dockerfile.persistence
-    container_name: rigour-persistence
+      dockerfile: Dockerfile
+    container_name: rigour-server
+    ports:
+      - "8080:8080"
     depends_on:
-      kafka:
-        condition: service_healthy
       mongo:
         condition: service_started
       geoipupdate:
         condition: service_healthy
     command:
-      - "--brokers"
-      - "kafka:9092"
       - "--mongo-uri"
       - "mongodb://mongo:27017"
       - "--geoip-path"
@@ -42,35 +47,23 @@ services:
       - rigour-network
     restart: unless-stopped
 
-  api:
-    build:
-      context: ./rigour
-      dockerfile: Dockerfile.api
-    container_name: rigour-api
-    ports:
-      - "8080:8080"
-    command:
-      - "--mongo-uri"
-      - "mongodb://mongo:27017"
-    depends_on:
-      - mongo
-    networks:
-      - rigour-network
-    restart: unless-stopped
-
   ui:
     build:
       context: ./rigour-ui
     container_name: rigour-ui
     depends_on:
-     - api
+      - server
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://api:8080
+      - BACKEND_URL=http://server:8080
     networks:
       - rigour-network
     restart: unless-stopped
+
+volumes:
+  mongo-data:
+  geoipupdate_data:
 
 networks:
   rigour-network:

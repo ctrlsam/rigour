@@ -1,6 +1,10 @@
-import { Host } from './types';
+import { Host, Campaign, CreateCampaignRequest, Vulnerability, VulnerabilityTemplateSummary } from './types';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+// Server-side uses BACKEND_URL directly; client-side uses relative paths (proxied by Next.js rewrites).
+export const API_BASE_URL =
+  typeof window === 'undefined'
+    ? (process.env.BACKEND_URL || 'http://localhost:8080')
+    : '';
 
 export interface CountryFacet {
   code: string;
@@ -93,6 +97,98 @@ export async function getFacets(
     throw new Error(`API error: ${response.status}`);
   }
 
+  return response.json();
+}
+
+export async function listCampaigns(): Promise<Campaign[]> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
+  return response.json();
+}
+
+export async function getCampaign(id: string): Promise<Campaign> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
+  return response.json();
+}
+
+export async function createCampaign(req: CreateCampaignRequest): Promise<Campaign> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function startCampaign(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}/start`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+}
+
+export async function pauseCampaign(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}/pause`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+}
+
+export async function resumeCampaign(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}/resume`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+}
+
+export async function cancelCampaign(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}/cancel`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+}
+
+export async function deleteCampaign(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/campaigns/${id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${response.status}`);
+  }
+}
+
+/**
+ * Get vulnerabilities grouped by template, sorted by severity (critical first).
+ */
+export async function getVulnerabilitySummary(severity?: string): Promise<VulnerabilityTemplateSummary[]> {
+  const params = new URLSearchParams();
+  if (severity) params.append('severity', severity);
+  const url = `${API_BASE_URL}/api/vulnerabilities/summary?${params.toString()}`;
+  const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Get all vulnerabilities for a host by IP. Returns empty array on 404 (vuln scan disabled).
+ */
+export async function getVulnsByIP(ip: string): Promise<Vulnerability[]> {
+  const url = `${API_BASE_URL}/api/hosts/${ip}/vulnerabilities`;
+  const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
   return response.json();
 }
 

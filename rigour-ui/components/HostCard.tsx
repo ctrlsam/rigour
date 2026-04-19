@@ -1,7 +1,15 @@
-import { Host } from '../lib/types';
+import { Host, SeverityLevel } from '../lib/types';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Badge } from './ui/badge';
-import { Globe, Network, Server, Clock, MapPin } from 'lucide-react';
+import { Globe, Network, Server, Clock, MapPin, AlertTriangle } from 'lucide-react';
+
+const SEVERITY_CLASSES: Record<SeverityLevel, string> = {
+  critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+  high:     'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  medium:   'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  low:      'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  info:     'bg-gray-500/20 text-gray-400 border-gray-500/30',
+};
 
 interface HostCardProps {
   host: Host;
@@ -19,8 +27,19 @@ export function HostCard({ host, onClick }: HostCardProps) {
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <h3 className="text-xl font-mono tracking-tight text-blue-400">{host.ip}</h3>
+          <div className="space-y-2 flex-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="text-xl font-mono tracking-tight text-blue-400">{host.ip}</h3>
+              {host.vulns && host.vulns.count > 0 && host.vulns.max_severity && (
+                <Badge
+                  variant="outline"
+                  className={`gap-1 text-xs px-2 py-0.5 ${SEVERITY_CLASSES[host.vulns.max_severity]}`}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {host.vulns.count} vuln{host.vulns.count !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Globe className="h-3 w-3" />
@@ -40,6 +59,18 @@ export function HostCard({ host, onClick }: HostCardProps) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">{host.asn.organization}</p>
+            {host.vulns?.cve_ids && host.vulns.cve_ids.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {host.vulns.cve_ids.slice(0, 3).map(cve => (
+                  <span key={cve} className="text-xs font-mono bg-red-950/40 text-red-300 border border-red-800/40 rounded px-1.5 py-0.5">
+                    {cve}
+                  </span>
+                ))}
+                {host.vulns.cve_ids.length > 3 && (
+                  <span className="text-xs text-muted-foreground">+{host.vulns.cve_ids.length - 3} more</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>

@@ -390,3 +390,7 @@ func (p *SSHPlugin) Type() plugins.Protocol {
 func (p *SSHPlugin) Priority() int {
 	return 2
 }
+
+func (p *SSHPlugin) MatchBanner(banner []byte) bool {
+	return bytes.HasPrefix(banner, []byte("SSH-"))
+}

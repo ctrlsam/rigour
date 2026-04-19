@@ -12,8 +12,9 @@ type Host struct {
 	Location  *Location `json:"location,omitempty"`
 	FirstSeen time.Time `json:"first_seen" bson:"first_seen"`
 	LastSeen  time.Time `json:"last_seen" bson:"last_seen"`
-	Services  []Service `json:"services,omitempty"`
-	Labels    []string  `json:"labels,omitempty"`
+	Services  []Service    `json:"services,omitempty"`
+	Labels    []string     `json:"labels,omitempty"`
+	Vulns     *VulnSummary `json:"vulns,omitempty" bson:"vulns,omitempty"`
 }
 
 type Location struct {

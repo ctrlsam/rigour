@@ -177,6 +177,10 @@ func (p *IMAPPlugin) Priority() int {
 	return 191
 }
 
+func (p *IMAPPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) >= 4 && banner[0] == '*' && banner[1] == ' '
+}
+
 func (p *TLSPlugin) Priority() int {
 	return 190
 }

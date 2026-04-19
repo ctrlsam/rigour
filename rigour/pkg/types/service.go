@@ -16,6 +16,10 @@ type Service struct {
 	Transport string    `json:"transport" bson:"transport"`
 	LastScan  time.Time `json:"last_scan" bson:"last_scan"`
 
+	// Campaign context — not stored in the hosts collection, used for pipeline routing
+	CampaignID  string `json:"campaign_id,omitempty" bson:"-"`
+	RunVulnScan bool   `json:"run_vuln_scan,omitempty" bson:"-"`
+
 	// Protocol-specific metadata fields - using plugin types
 	HTTP          *plugins.ServiceHTTP          `json:"http,omitempty" bson:"http,omitempty"`
 	HTTPS         *plugins.ServiceHTTPS         `json:"https,omitempty" bson:"https,omitempty"`
@@ -55,6 +59,14 @@ type Service struct {
 	IPMI          *plugins.ServiceIPMI          `json:"ipmi,omitempty" bson:"ipmi,omitempty"`
 	JDWP          *plugins.ServiceJDWP          `json:"jdwp,omitempty" bson:"jdwp,omitempty"`
 	MinecraftJava *plugins.ServiceMinecraftJava `json:"minecraft-java,omitempty" bson:"minecraftjava,omitempty"`
+	AMQP          *plugins.ServiceAMQP          `json:"amqp,omitempty" bson:"amqp,omitempty"`
+	Docker        *plugins.ServiceDockerAPI     `json:"docker,omitempty" bson:"docker,omitempty"`
+	Etcd          *plugins.ServiceEtcd          `json:"etcd,omitempty" bson:"etcd,omitempty"`
+	IRC           *plugins.ServiceIRC           `json:"irc,omitempty" bson:"irc,omitempty"`
+	Memcached     *plugins.ServiceMemcached     `json:"memcached,omitempty" bson:"memcached,omitempty"`
+	MongoDB       *plugins.ServiceMongoDB       `json:"mongodb,omitempty" bson:"mongodb,omitempty"`
+	SIP           *plugins.ServiceSIP           `json:"sip,omitempty" bson:"sip,omitempty"`
+	ZooKeeper     *plugins.ServiceZooKeeper     `json:"zookeeper,omitempty" bson:"zookeeper,omitempty"`
 }
 
 // FromPluginService converts a plugins.Service to a types.Service, populating the appropriate
@@ -260,6 +272,46 @@ func FromPluginService(pluginSvc *plugins.Service, lastScan time.Time) *Service 
 		var metadata plugins.ServiceMinecraftJava
 		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
 			svc.MinecraftJava = &metadata
+		}
+	case plugins.ProtoAMQP:
+		var metadata plugins.ServiceAMQP
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.AMQP = &metadata
+		}
+	case plugins.ProtoDockerAPI:
+		var metadata plugins.ServiceDockerAPI
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.Docker = &metadata
+		}
+	case plugins.ProtoEtcd:
+		var metadata plugins.ServiceEtcd
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.Etcd = &metadata
+		}
+	case plugins.ProtoIRC:
+		var metadata plugins.ServiceIRC
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.IRC = &metadata
+		}
+	case plugins.ProtoMemcached:
+		var metadata plugins.ServiceMemcached
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.Memcached = &metadata
+		}
+	case plugins.ProtoMongoDB:
+		var metadata plugins.ServiceMongoDB
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.MongoDB = &metadata
+		}
+	case plugins.ProtoSIP:
+		var metadata plugins.ServiceSIP
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.SIP = &metadata
+		}
+	case plugins.ProtoZooKeeper:
+		var metadata plugins.ServiceZooKeeper
+		if err := json.Unmarshal(pluginSvc.Raw, &metadata); err == nil {
+			svc.ZooKeeper = &metadata
 		}
 	}
 

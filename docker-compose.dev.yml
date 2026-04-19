@@ -1,0 +1,16 @@
+# Local development override — runs only the sidecars (MongoDB + GeoIP).
+# GeoIP data is written to ./geoip-data so the native Go server can read it.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up mongo geoipupdate -d
+#
+# Then run the Go server and UI natively.
+
+services:
+  geoipupdate:
+    volumes:
+      - ./geoip-data:/usr/share/GeoIP
+
+networks:
+  rigour-network:
+    driver: bridge

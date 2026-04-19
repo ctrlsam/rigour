@@ -182,11 +182,14 @@ func (p *HTTPSPlugin) Type() plugins.Protocol {
 }
 
 func (p *HTTPPlugin) Priority() int {
-	return 0
+	// High value so HTTP runs last in the slow lane — many non-HTTP services
+	// (MongoDB, Redis, etc.) return a valid HTTP response to a GET probe, so
+	// service-specific plugins must get first shot.
+	return 10000
 }
 
 func (p *HTTPSPlugin) Priority() int {
-	return 1
+	return 10001
 }
 
 func (p *HTTPPlugin) Name() string {

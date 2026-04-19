@@ -8,6 +8,12 @@ import (
 	"github.com/ctrlsam/rigour/pkg/types"
 )
 
+// HostEnricher enriches a host with additional metadata.
+type HostEnricher interface {
+	EnrichHost(ctx context.Context, host *types.Host) (*types.Host, error)
+	Close()
+}
+
 type Enricher struct {
 	geoIPReaders *GeoIPReaders
 }

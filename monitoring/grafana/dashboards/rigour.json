@@ -1,0 +1,90 @@
+{
+  "title": "Rigour",
+  "uid": "rigour-main",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Campaigns",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rigour_campaigns_active", "legendFormat": "active" }],
+      "options": { "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 2,
+      "title": "Ports Discovered / min",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rate(rigour_ports_discovered_total[1m]) * 60", "legendFormat": "ports/min" }],
+      "options": { "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 3,
+      "title": "Services Identified / min",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rate(rigour_services_identified_total[1m]) * 60", "legendFormat": "services/min" }],
+      "options": { "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 4,
+      "title": "Fingerprint Queue Depth",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rigour_fingerprint_queue_depth", "legendFormat": "queued" }],
+      "options": { "colorMode": "value", "graphMode": "none" }
+    },
+    {
+      "id": 5,
+      "title": "Active Fingerprint Workers",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rigour_fingerprint_active_workers", "legendFormat": "workers" }],
+      "options": { "colorMode": "value", "graphMode": "none" }
+    },
+    {
+      "id": 6,
+      "title": "Discovery & Fingerprint Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(rigour_ports_discovered_total[1m]) * 60", "legendFormat": "ports discovered/min" },
+        { "expr": "rate(rigour_services_identified_total[1m]) * 60", "legendFormat": "services identified/min" },
+        { "expr": "rate(rigour_services_unknown_total[1m]) * 60", "legendFormat": "unknown/min" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Worker Pool",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rigour_fingerprint_queue_depth", "legendFormat": "queue depth" },
+        { "expr": "rigour_fingerprint_active_workers", "legendFormat": "active workers" },
+        { "expr": "rate(rigour_fingerprint_inline_total[1m]) * 60", "legendFormat": "inline (queue-full)/min" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Protocols Identified",
+      "type": "piechart",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "increase(rigour_services_identified_total[1h])", "legendFormat": "{{protocol}}" }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Total Services Found (all campaigns)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rigour_campaign_services_found_total", "legendFormat": "total" }
+      ]
+    }
+  ]
+}

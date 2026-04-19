@@ -87,3 +87,7 @@ func (p *VNCPlugin) Type() plugins.Protocol {
 func (p *VNCPlugin) Priority() int {
 	return 265
 }
+
+func (p *VNCPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) >= 4 && banner[0] == 'R' && banner[1] == 'F' && banner[2] == 'B' && banner[3] == ' '
+}

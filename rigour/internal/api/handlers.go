@@ -10,6 +10,65 @@ import (
 	"github.com/go-chi/render"
 )
 
+// allowedFilterFields is the set of host document fields that may be used as query filters.
+var allowedFilterFields = map[string]bool{
+	"ip":                    true,
+	"location.country_code": true,
+	"location.country_name": true,
+	"asn.number":            true,
+	"asn.organization":      true,
+	"services.protocol":     true,
+	"services.port":         true,
+	"services.transport":    true,
+	"services.tls":          true,
+	"labels":                true,
+	"vulns.max_severity":    true,
+	"vulns.template_id":     true,
+}
+
+// validateFilter rejects any filter that references unknown fields or uses disallowed operators.
+// Only scalar values and {"$in": [...scalars...]} are permitted.
+func validateFilter(filter map[string]interface{}) error {
+	for key, val := range filter {
+		if !allowedFilterFields[key] {
+			return fmt.Errorf("filter field %q is not permitted", key)
+		}
+		if err := validateFilterValue(val); err != nil {
+			return fmt.Errorf("invalid value for field %q: %w", key, err)
+		}
+	}
+	return nil
+}
+
+func validateFilterValue(val interface{}) error {
+	switch v := val.(type) {
+	case string, float64, bool:
+		return nil
+	case map[string]interface{}:
+		if len(v) != 1 {
+			return fmt.Errorf("only single-operator objects are permitted")
+		}
+		inVal, ok := v["$in"]
+		if !ok {
+			return fmt.Errorf("only the $in operator is permitted")
+		}
+		items, ok := inVal.([]interface{})
+		if !ok {
+			return fmt.Errorf("$in value must be an array")
+		}
+		for _, item := range items {
+			switch item.(type) {
+			case string, float64, bool:
+			default:
+				return fmt.Errorf("$in array elements must be scalar values")
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("filter values must be strings, numbers, booleans, or {\"$in\": [...]} objects")
+	}
+}
+
 // Handler provides HTTP handler methods for the API.
 type Handler struct {
 	queryHandler *QueryHandler
@@ -31,6 +90,11 @@ func (handler *Handler) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal([]byte(filterParam), &filter); err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, map[string]string{"error": "Invalid filter parameter"})
+			return
+		}
+		if err := validateFilter(filter); err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": err.Error()})
 			return
 		}
 	}
@@ -114,6 +178,11 @@ func (handler *Handler) FacetsHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal([]byte(filterParam), &filter); err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, map[string]string{"error": "Invalid filter parameter"})
+			return
+		}
+		if err := validateFilter(filter); err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": err.Error()})
 			return
 		}
 	}

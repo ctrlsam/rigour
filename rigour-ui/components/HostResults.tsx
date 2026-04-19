@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Host } from '../lib/types';
 import { HostCard } from './HostCard';
 import { Button } from './ui/button';
@@ -9,75 +9,39 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 interface HostResultsProps {
   hosts: Host[];
   totalCount: number;
+  currentPage: number;
+  nextPageToken?: string;
   isLoading?: boolean;
 }
 
-const HOSTS_PER_PAGE = 10;
+export function HostResults({ hosts, totalCount, currentPage, nextPageToken }: HostResultsProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-export function HostResults({ hosts, totalCount, isLoading }: HostResultsProps) {
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const totalPages = Math.ceil(hosts.length / HOSTS_PER_PAGE);
-  const startIndex = (currentPage - 1) * HOSTS_PER_PAGE;
-  const endIndex = startIndex + HOSTS_PER_PAGE;
-  const paginatedHosts = hosts.slice(startIndex, endIndex);
-
-  // Reset to page 1 when filters change
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+  const handleNext = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', String(currentPage + 1));
+    params.set('page_token', nextPageToken!);
+    router.push(`?${params.toString()}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Reset page when hosts change
-  if (currentPage > totalPages && totalPages > 0) {
-    setCurrentPage(1);
-  }
-
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const showPages = 5;
-
-    if (totalPages <= showPages) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) {
-          pages.push(i);
-        }
-        pages.push('...');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = totalPages - 3; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        pages.push(1);
-        pages.push('...');
-        pages.push(currentPage - 1);
-        pages.push(currentPage);
-        pages.push(currentPage + 1);
-        pages.push('...');
-        pages.push(totalPages);
-      }
-    }
-
-    return pages;
+  const handlePrev = () => {
+    router.back();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const hasPrev = currentPage > 1;
+  const hasNext = !!nextPageToken;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing <span className="text-foreground font-medium">{startIndex + 1}-{Math.min(endIndex, hosts.length)}</span> of{' '}
-          <span className="text-foreground font-medium">{hosts.length}</span> results
+          <span className="text-foreground font-medium">{hosts.length}</span> results on page{' '}
+          <span className="text-foreground font-medium">{currentPage}</span>
           {totalCount !== hosts.length && (
-            <span className="ml-1">
-              ({totalCount} total hosts)
-            </span>
+            <span className="ml-1">({totalCount} total hosts)</span>
           )}
         </div>
       </div>
@@ -89,49 +53,35 @@ export function HostResults({ hosts, totalCount, isLoading }: HostResultsProps) 
       ) : (
         <>
           <div className="space-y-4">
-            {paginatedHosts.map((host) => (
+            {hosts.map((host) => (
               <a href={`host/${host.ip}`} key={host.id} className="block">
                 <HostCard key={host.id} host={host} />
               </a>
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-4">
+          {(hasPrev || hasNext) && (
+            <div className="flex items-center justify-center gap-4 pt-4">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
+                onClick={handlePrev}
+                disabled={!hasPrev}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Prev
               </Button>
 
-              {getPageNumbers().map((page, index) => (
-                typeof page === 'number' ? (
-                  <Button
-                    key={index}
-                    variant={currentPage === page ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handlePageChange(page)}
-                    className="min-w-[40px]"
-                  >
-                    {page}
-                  </Button>
-                ) : (
-                  <span key={index} className="px-2 text-muted-foreground">
-                    {page}
-                  </span>
-                )
-              ))}
+              <span className="text-sm text-muted-foreground">Page {currentPage}</span>
 
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                onClick={handleNext}
+                disabled={!hasNext}
               >
-                <ChevronRight className="h-4 w-4" />
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           )}

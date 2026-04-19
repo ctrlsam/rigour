@@ -75,3 +75,7 @@ func (p *RSYNCPlugin) Type() plugins.Protocol {
 func (p *RSYNCPlugin) Priority() int {
 	return 578
 }
+
+func (p *RSYNCPlugin) MatchBanner(banner []byte) bool {
+	return strings.HasPrefix(string(banner), "@RSYNCD:")
+}

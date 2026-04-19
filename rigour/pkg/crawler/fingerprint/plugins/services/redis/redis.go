@@ -139,6 +139,14 @@ func (p *REDISPlugin) Priority() int {
 	return 413
 }
 
+func (p *REDISPlugin) MatchBanner(banner []byte) bool {
+	if len(banner) == 0 {
+		return false
+	}
+	b := banner[0]
+	return b == '+' || b == '-' || b == ':' || b == '$' || b == '*'
+}
+
 func (p *REDISTLSPlugin) Priority() int {
 	return 414
 }

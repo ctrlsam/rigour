@@ -64,6 +64,14 @@ const (
 	ProtoTelnet        = "telnet"
 	ProtoVNC           = "vnc"
 	ProtoUnknown       = "unknown"
+	ProtoAMQP          = "amqp"
+	ProtoMemcached     = "memcached"
+	ProtoZooKeeper     = "zookeeper"
+	ProtoMongoDB       = "mongodb"
+	ProtoEtcd          = "etcd"
+	ProtoDockerAPI     = "docker"
+	ProtoSIP           = "sip"
+	ProtoIRC           = "irc"
 )
 
 // Used as a key for maps to plugins.
@@ -201,6 +209,38 @@ func (e Service) Metadata() Metadata {
 		var p ServiceMinecraftJava
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
+	case ProtoAMQP:
+		var p ServiceAMQP
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoMemcached:
+		var p ServiceMemcached
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoZooKeeper:
+		var p ServiceZooKeeper
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoMongoDB:
+		var p ServiceMongoDB
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoEtcd:
+		var p ServiceEtcd
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoDockerAPI:
+		var p ServiceDockerAPI
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoSIP:
+		var p ServiceSIP
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoIRC:
+		var p ServiceIRC
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
 	default:
 		var p ServiceUnknown
 		_ = json.Unmarshal(e.Raw, &p)
@@ -243,6 +283,14 @@ type Plugin interface {
 	Name() string
 	Type() Protocol
 	Priority() int
+}
+
+// BannerMatcher is an optional plugin interface. When a server sends data
+// immediately after the TCP handshake, the scanner reads that banner and calls
+// MatchBanner before opening additional connections. Plugins returning false are
+// skipped, avoiding unnecessary connection attempts on non-matching ports.
+type BannerMatcher interface {
+	MatchBanner(banner []byte) bool
 }
 
 type Service struct {
@@ -512,3 +560,53 @@ type ServiceJDWP struct {
 }
 
 func (e ServiceJDWP) Type() string { return ProtoJDWP }
+
+type ServiceAMQP struct {
+	ProtocolVersion string `json:"protocolVersion"`
+}
+
+func (e ServiceAMQP) Type() string { return ProtoAMQP }
+
+type ServiceMemcached struct {
+	Version string `json:"version"`
+}
+
+func (e ServiceMemcached) Type() string { return ProtoMemcached }
+
+type ServiceZooKeeper struct{}
+
+func (e ServiceZooKeeper) Type() string { return ProtoZooKeeper }
+
+type ServiceMongoDB struct {
+	MaxWireVersion int `json:"maxWireVersion,omitempty"`
+}
+
+func (e ServiceMongoDB) Type() string { return ProtoMongoDB }
+
+type ServiceEtcd struct {
+	ServerVersion  string `json:"serverVersion"`
+	ClusterVersion string `json:"clusterVersion,omitempty"`
+}
+
+func (e ServiceEtcd) Type() string { return ProtoEtcd }
+
+type ServiceDockerAPI struct {
+	Version string `json:"version,omitempty"`
+	OSType  string `json:"osType,omitempty"`
+}
+
+func (e ServiceDockerAPI) Type() string { return ProtoDockerAPI }
+
+type ServiceSIP struct {
+	UserAgent string `json:"userAgent,omitempty"`
+	Allow     string `json:"allow,omitempty"`
+}
+
+func (e ServiceSIP) Type() string { return ProtoSIP }
+
+type ServiceIRC struct {
+	ServerName string `json:"serverName,omitempty"`
+	Banner     string `json:"banner"`
+}
+
+func (e ServiceIRC) Type() string { return ProtoIRC }

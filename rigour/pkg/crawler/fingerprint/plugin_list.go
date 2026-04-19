@@ -40,4 +40,12 @@ import (
 	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/stun"
 	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/telnet"
 	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/vnc"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/amqp"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/docker"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/etcd"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/irc"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/memcached"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/mongodb"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/sip"
+	_ "github.com/ctrlsam/rigour/pkg/crawler/fingerprint/plugins/services/zookeeper"
 )

@@ -31,3 +31,4 @@ rigour/rigour
 .env
 
 /data
+/geoip-data

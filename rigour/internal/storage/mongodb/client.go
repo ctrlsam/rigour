@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	internalconst "github.com/ctrlsam/rigour/internal"
 	"github.com/ctrlsam/rigour/internal/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -76,7 +77,27 @@ func (c *Client) NewHostsRepository(ctx context.Context, cfg storage.RepositoryC
 	coll := db.Collection(cfg.Collection)
 
 	// Delegate to hosts.go to create repository with proper indexes
-	return NewHostsRepository(ctx, coll)
+	return NewHostsRepository(ctx, coll, internalconst.VulnerabilitiesRepositoryName)
+}
+
+// NewCampaignRepository creates a new MongoDB campaigns repository.
+func (c *Client) NewCampaignRepository(ctx context.Context, cfg storage.RepositoryConfig) (storage.CampaignRepository, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("mongodb client: client is not initialized")
+	}
+	db := c.client.Database(cfg.Database)
+	coll := db.Collection(cfg.Collection)
+	return NewCampaignRepository(ctx, coll)
+}
+
+// NewVulnerabilityRepository creates a new MongoDB vulnerability repository.
+func (c *Client) NewVulnerabilityRepository(ctx context.Context, cfg storage.RepositoryConfig) (storage.VulnerabilityRepository, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("mongodb client: client is not initialized")
+	}
+	db := c.client.Database(cfg.Database)
+	coll := db.Collection(cfg.Collection)
+	return NewVulnerabilityRepository(ctx, coll)
 }
 
 // Close disconnects the MongoDB client.

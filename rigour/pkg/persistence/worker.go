@@ -4,75 +4,88 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/ctrlsam/rigour/internal/messaging/kafka"
+	"github.com/ctrlsam/rigour/internal/messaging"
 	"github.com/ctrlsam/rigour/internal/storage"
 	"github.com/ctrlsam/rigour/internal/storage/mongodb"
 	"github.com/ctrlsam/rigour/pkg/types"
 )
 
-// App wires Kafka consumer + Mongo repository + enricher.
+// App wires a service consumer + Mongo repository + enricher pipeline.
 type App struct {
-	cfg Config
-
-	consumer *kafka.TypedConsumer[types.Service]
+	cfg      Config
+	consumer messaging.Consumer[types.Service]
 	repo     storage.HostRepository
-	enricher *Enricher
+	enrichers []HostEnricher
 
-	mongoClient *mongodb.Client
+	vulnEnricher *VulnEnricher
+	mongoClient  *mongodb.Client
 }
 
-func NewApp(ctx context.Context, cfg Config) (*App, error) {
+// NewApp creates an App. consumer is the source of service events; for single-node
+// mode pass a *channel.TypedChannel, for cluster mode pass a Kafka consumer.
+func NewApp(ctx context.Context, cfg Config, consumer messaging.Consumer[types.Service]) (*App, error) {
 	cfg = cfg.withDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	consumer, err := kafka.NewTypedConsumer[types.Service](kafka.ConsumerConfig{
-		Brokers: cfg.KafkaBrokers,
-		Topic:   cfg.Topic,
-		GroupID: cfg.KafkaGroupID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("persistence: kafka consumer: %w", err)
-	}
-
 	mongoClient, err := mongodb.NewClient(ctx, cfg.DbURI, cfg.DbTimeout)
 	if err != nil {
-		_ = consumer.Close()
 		return nil, fmt.Errorf("persistence: mongodb client: %w", err)
 	}
 
 	repo, err := mongoClient.NewHostsRepository(ctx, storage.RepositoryConfig{
-		URI:        cfg.DbURI,
 		Database:   cfg.DbName,
 		Collection: cfg.DbCollection,
-		Timeout:    int(cfg.DbTimeout.Seconds()),
 	})
 	if err != nil {
-		_ = consumer.Close()
 		_ = mongoClient.Close(ctx)
 		return nil, fmt.Errorf("persistence: hosts repository: %w", err)
 	}
 
-	// Open GeoIP databases from data directory
-	geoipReaders, err := OpenGeoIPReaders(cfg.GeoIPDataDir)
-	if err != nil {
-		_ = consumer.Close()
-		_ = mongoClient.Close(ctx)
-		return nil, fmt.Errorf("persistence: geoip: %w", err)
+	var enrichers []HostEnricher
+	if cfg.GeoIPDataDir != "" {
+		geoipReaders, err := OpenGeoIPReaders(cfg.GeoIPDataDir)
+		if err != nil {
+			_ = mongoClient.Close(ctx)
+			return nil, fmt.Errorf("persistence: geoip: %w", err)
+		}
+		enrichers = append(enrichers, NewEnricher(geoipReaders))
 	}
 
-	enricher := NewEnricher(geoipReaders)
-
-	return &App{
+	app := &App{
 		cfg:         cfg,
 		consumer:    consumer,
 		repo:        repo,
-		enricher:    enricher,
+		enrichers:   enrichers,
 		mongoClient: mongoClient,
-	}, nil
+	}
+
+	if cfg.VulnScanEnabled {
+		vulnRepo, err := mongoClient.NewVulnerabilityRepository(ctx, storage.RepositoryConfig{
+			Database:   cfg.DbName,
+			Collection: cfg.DbVulnCollection,
+		})
+		if err != nil {
+			_ = mongoClient.Close(ctx)
+			return nil, fmt.Errorf("persistence: vuln repository: %w", err)
+		}
+		ve, err := NewVulnEnricher(ctx, VulnEnricherConfig{
+			NucleiTemplateDir: cfg.NucleiTemplateDir,
+			TemplateTags:      cfg.NucleiTemplateTags,
+			Concurrency:       cfg.NucleiConcurrency,
+		}, vulnRepo)
+		if err != nil {
+			_ = mongoClient.Close(ctx)
+			return nil, fmt.Errorf("persistence: vuln enricher: %w", err)
+		}
+		app.vulnEnricher = ve
+	}
+
+	return app, nil
 }
 
 // Close closes underlying resources.
@@ -81,18 +94,16 @@ func (app *App) Close(ctx context.Context) error {
 	if app == nil {
 		return nil
 	}
-	if app.consumer != nil {
-		if err := app.consumer.Close(); err != nil {
-			firstErr = err
-		}
+	if app.vulnEnricher != nil {
+		app.vulnEnricher.Wait()
+	}
+	for _, e := range app.enrichers {
+		e.Close()
 	}
 	if app.mongoClient != nil {
-		if err := app.mongoClient.Close(ctx); err != nil && firstErr == nil {
+		if err := app.mongoClient.Close(ctx); err != nil {
 			firstErr = err
 		}
-	}
-	if app.enricher != nil {
-		app.enricher.Close()
 	}
 	return firstErr
 }
@@ -102,7 +113,7 @@ func (app *App) Run(ctx context.Context) error {
 	if app == nil {
 		return errors.New("persistence: app is nil")
 	}
-	fmt.Println("persistence: started consuming messages...")
+	slog.Info("persistence consumer started")
 	for {
 		select {
 		case <-ctx.Done():
@@ -119,13 +130,17 @@ func (app *App) Run(ctx context.Context) error {
 		}
 
 		if err := app.handleService(ctx, msg.Value); err != nil {
-			return err
+			slog.Error("persistence: failed to handle service, skipping",
+				"ip", msg.Value.IP,
+				"port", msg.Value.Port,
+				"err", err,
+			)
 		}
 	}
 }
 
 func (app *App) handleService(ctx context.Context, svc types.Service) error {
-	fmt.Println("persistence: processing service:", svc.IP, svc.Port, svc.Protocol)
+	slog.Debug("processing service", "ip", svc.IP, "port", svc.Port, "protocol", svc.Protocol)
 
 	now := time.Now()
 	if svc.LastScan.IsZero() {
@@ -137,11 +152,14 @@ func (app *App) handleService(ctx context.Context, svc types.Service) error {
 		return err
 	}
 
-	// 2. Enrich host with GeoIP/ASN data.
+	// 2. Run enrichment pipeline.
 	host := &types.Host{IP: svc.IP, LastSeen: now}
-	host, err := app.enricher.EnrichHost(ctx, host)
-	if err != nil {
-		return err
+	var err error
+	for _, e := range app.enrichers {
+		host, err = e.EnrichHost(ctx, host)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 3. Update host with enrichment data (ASN, Location, Labels).
@@ -150,5 +168,16 @@ func (app *App) handleService(ctx context.Context, svc types.Service) error {
 	}
 
 	// 4. Upsert service under the enriched host.
-	return app.repo.UpsertService(ctx, svc)
+	if err := app.repo.UpsertService(ctx, svc); err != nil {
+		return err
+	}
+
+	// 5. Dispatch vuln scan if enabled for this campaign (best-effort, non-blocking).
+	if svc.RunVulnScan && app.vulnEnricher != nil {
+		if err := app.vulnEnricher.Dispatch(ctx, svc); err != nil {
+			slog.Error("vuln scan dispatch error", "err", err)
+		}
+	}
+
+	return nil
 }

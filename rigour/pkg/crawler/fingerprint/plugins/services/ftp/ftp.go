@@ -55,3 +55,7 @@ func (p *FTPPlugin) Type() plugins.Protocol {
 func (p *FTPPlugin) Priority() int {
 	return 10
 }
+
+func (p *FTPPlugin) MatchBanner(banner []byte) bool {
+	return len(banner) >= 3 && banner[0] >= '1' && banner[0] <= '5' && banner[1] >= '0' && banner[1] <= '9' && banner[2] >= '0' && banner[2] <= '9'
+}

@@ -9,10 +9,8 @@ import (
 
 // RepositoryConfig holds configuration for repository initialization.
 type RepositoryConfig struct {
-	URI        string
 	Database   string
 	Collection string
-	Timeout    int // in seconds
 }
 
 // CountryFacet represents a country facet with code and name.
@@ -31,9 +29,34 @@ type ASNFacet struct {
 
 // FacetCounts represents aggregated counts for various facets.
 type FacetCounts struct {
-	Services  map[string]int `json:"services,omitempty"`
-	Countries []CountryFacet `json:"countries,omitempty"`
-	ASNs      []ASNFacet     `json:"asns,omitempty"`
+	Services  map[string]int `json:"services"`
+	Countries []CountryFacet `json:"countries"`
+	ASNs      []ASNFacet     `json:"asns"`
+}
+
+// CampaignFilter holds optional filters for listing campaigns.
+type CampaignFilter struct {
+	Status types.CampaignStatus // empty = all statuses
+}
+
+// CampaignRepository is the interface for storing and querying campaign records.
+type CampaignRepository interface {
+	CreateCampaign(ctx context.Context, c *types.Campaign) (*types.Campaign, error)
+	GetCampaign(ctx context.Context, id string) (*types.Campaign, error)
+	ListCampaigns(ctx context.Context, filter CampaignFilter) ([]types.Campaign, error)
+	UpdateCampaignStatus(ctx context.Context, id string, status types.CampaignStatus, errMsg string) error
+	UpdateCampaignProgress(ctx context.Context, id string, progress types.CampaignProgress) error
+	SetCampaignCIDRs(ctx context.Context, id string, cidrs []string) error
+	DeleteCampaign(ctx context.Context, id string) error
+}
+
+// VulnerabilityRepository is the interface for storing and querying vulnerability findings.
+type VulnerabilityRepository interface {
+	UpsertVulnerability(ctx context.Context, v types.Vulnerability) error
+	ListByIP(ctx context.Context, ip string) ([]types.Vulnerability, error)
+	ListByCampaign(ctx context.Context, campaignID string, severity string) ([]types.Vulnerability, error)
+	ListAll(ctx context.Context, severity string) ([]types.Vulnerability, error)
+	SummariseByTemplate(ctx context.Context, severity string) ([]types.VulnerabilityTemplateSummary, error)
 }
 
 // HostRepository is the interface for storing and querying host records.

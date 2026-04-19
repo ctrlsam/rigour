@@ -65,21 +65,32 @@ func setupPlugins() {
 func (c *FingerprintConfig) FingerprintTarget(target plugins.Target) (*plugins.Service, error) {
 	ip := target.Address.Addr().String()
 	port := target.Address.Port()
+	var pluginsChecked int
 
-	//fmt.Println("[FINGERPRINT] Scanning target:", target.Address.String())
+	logMatch := func(result *plugins.Service) {
+		if c.Verbose {
+			log.Printf("[fingerprint] %s:%d matched %s after %d probes\n",
+				ip, port, result.Protocol, pluginsChecked)
+		}
+	}
 
-	// first check the default port mappings for TCP / TLS
+	// Fast lane: plugins whose default port matches
 	for _, plugin := range sortedTCPPlugins {
+		if !c.pluginAllowed(plugin.Name()) {
+			continue
+		}
 		if plugin.PortPriority(port) {
 			conn, err := DialTCP(ip, port)
 			if err != nil {
-				return nil, fmt.Errorf("unable to connect, err = %w", err)
+				return nil, nil
 			}
+			pluginsChecked++
 			result, err := simplePluginRunner(conn, target, c, plugin)
 			if err != nil && c.Verbose {
 				log.Printf("error: %v scanning %v\n", err, target.Address.String())
 			}
 			if result != nil && err == nil {
+				logMatch(result)
 				return result, nil
 			}
 		}
@@ -89,62 +100,123 @@ func (c *FingerprintConfig) FingerprintTarget(target plugins.Target) (*plugins.S
 	isTLS := tlsErr == nil
 	if isTLS {
 		for _, plugin := range sortedTCPTLSPlugins {
+			if !c.pluginAllowed(plugin.Name()) {
+				continue
+			}
 			if plugin.PortPriority(port) {
+				pluginsChecked++
 				result, err := simplePluginRunner(tlsConn, target, c, plugin)
 				if err != nil && c.Verbose {
 					log.Printf("error: %v scanning %v\n", err, target.Address.String())
 				}
 				if result != nil && err == nil {
-					// identified plugin match
+					logMatch(result)
 					return result, nil
 				}
 				tlsConn, err = DialTLS(target)
 				if err != nil {
-					return nil, fmt.Errorf("error connecting via TLS, err = %w", err)
+					break
 				}
 			}
 		}
 	}
 
-	// if we're fast mode, return (because fast mode only checks the default port service mapping)
+	// Fast mode: only probe plugins where port matches the plugin's default port
 	if c.FastMode {
+		if c.Verbose {
+			log.Printf("[fingerprint] %s:%d unidentified after %d probes (fast mode)\n", ip, port, pluginsChecked)
+		}
 		return nil, nil
 	}
 
-	// go through each service mapping and check it
-
+	// Slow lane: try every allowed plugin that wasn't already tried in the fast lane
+	// (fast lane already handled plugins where PortPriority(port)==true).
 	if isTLS {
 		for _, plugin := range sortedTCPTLSPlugins {
+			if !c.pluginAllowed(plugin.Name()) || plugin.PortPriority(port) {
+				continue
+			}
 			tlsConn, err := DialTLS(target)
 			if err != nil {
-				return nil, fmt.Errorf("error connecting via TLS, err = %w", err)
+				break
 			}
+			pluginsChecked++
 			result, err := simplePluginRunner(tlsConn, target, c, plugin)
 			if err != nil && c.Verbose {
 				log.Printf("error: %v scanning %v\n", err, target.Address.String())
 			}
 			if result != nil && err == nil {
-				// identified plugin match
+				logMatch(result)
 				return result, nil
 			}
 		}
 	} else {
+		// Attempt a passive banner read on a short-lived connection. Many server-first
+		// protocols (SSH, FTP, SMTP, Redis, MySQL, VNC, …) send a greeting immediately,
+		// which lets us route directly to the right plugin without trying all of them.
+		bannerTimeout := min(300*time.Millisecond, c.DefaultTimeout/3)
+		var banner []byte
+		if bannerConn, err := DialTCP(ip, port); err == nil {
+			banner = readBanner(bannerConn, bannerTimeout)
+			bannerConn.Close()
+		}
+
+		if len(banner) > 0 {
+			for _, plugin := range sortedTCPPlugins {
+				if !c.pluginAllowed(plugin.Name()) || plugin.PortPriority(port) {
+					continue
+				}
+				bm, ok := plugin.(plugins.BannerMatcher)
+				if !ok || !bm.MatchBanner(banner) {
+					continue
+				}
+				conn, err := DialTCP(ip, port)
+				if err != nil {
+					return nil, nil
+				}
+				pluginsChecked++
+				result, err := simplePluginRunner(conn, target, c, plugin)
+				if err != nil && c.Verbose {
+					log.Printf("error: %v scanning %v\n", err, target.Address.String())
+				}
+				if result != nil && err == nil {
+					logMatch(result)
+					return result, nil
+				}
+				// Banner matched a plugin but run failed — fall through to full probe.
+				break
+			}
+		}
+
+		// Active-probe fallback: plugins that must send data first (client-first protocols),
+		// or banner-matchers that were already tried above.
 		for _, plugin := range sortedTCPPlugins {
+			if !c.pluginAllowed(plugin.Name()) || plugin.PortPriority(port) {
+				continue
+			}
+			// Skip banner-matched plugins — already handled above.
+			if _, ok := plugin.(plugins.BannerMatcher); ok && len(banner) > 0 {
+				continue
+			}
 			conn, err := DialTCP(ip, port)
 			if err != nil {
-				return nil, fmt.Errorf("unable to connect, err = %w", err)
+				return nil, nil
 			}
+			pluginsChecked++
 			result, err := simplePluginRunner(conn, target, c, plugin)
 			if err != nil && c.Verbose {
 				log.Printf("error: %v scanning %v\n", err, target.Address.String())
 			}
 			if result != nil && err == nil {
-				// identified plugin match
+				logMatch(result)
 				return result, nil
 			}
 		}
 	}
 
+	if c.Verbose {
+		log.Printf("[fingerprint] %s:%d unidentified after %d probes\n", ip, port, pluginsChecked)
+	}
 	return nil, nil
 }
 
@@ -152,6 +224,9 @@ func (c *FingerprintConfig) FingerprintTarget(target plugins.Target) (*plugins.S
 func (c *FingerprintConfig) UDPScanTarget(target plugins.Target) (*plugins.Service, error) {
 	// first check the default port mappings for TCP / TLS
 	for _, plugin := range sortedUDPPlugins {
+		if !c.pluginAllowed(plugin.Name()) {
+			continue
+		}
 		ip := target.Address.Addr().String()
 		port := target.Address.Port()
 		if plugin.PortPriority(port) {
@@ -175,9 +250,12 @@ func (c *FingerprintConfig) UDPScanTarget(target plugins.Target) (*plugins.Servi
 	}
 
 	for _, plugin := range sortedUDPPlugins {
+		if !c.pluginAllowed(plugin.Name()) {
+			continue
+		}
 		conn, err := DialUDP(target.Address.Addr().String(), target.Address.Port())
 		if err != nil {
-			return nil, fmt.Errorf("unable to connect, err = %w", err)
+			return nil, nil
 		}
 		result, err := simplePluginRunner(conn, target, c, plugin)
 		if result != nil && err == nil {
@@ -217,6 +295,15 @@ func simplePluginRunner(
 	return result, err
 }
 
+// SortedTCPPlugins returns the TCP plugin list (sorted by priority) for inspection.
+func SortedTCPPlugins() []plugins.Plugin { return sortedTCPPlugins }
+
+// SortedTLSPlugins returns the TCP+TLS plugin list for inspection.
+func SortedTLSPlugins() []plugins.Plugin { return sortedTCPTLSPlugins }
+
+// SortedUDPPlugins returns the UDP plugin list for inspection.
+func SortedUDPPlugins() []plugins.Plugin { return sortedUDPPlugins }
+
 func DialTLS(target plugins.Target) (net.Conn, error) {
 	config := &tlsConfig
 	if target.Host != "" {
@@ -231,6 +318,15 @@ func DialTLS(target plugins.Target) (net.Conn, error) {
 func DialTCP(ip string, port uint16) (net.Conn, error) {
 	addr := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 	return dialer.Dial("tcp", addr)
+}
+
+// readBanner attempts a short passive read on conn. Returns whatever bytes the
+// server sends within timeout. The caller is responsible for closing conn.
+func readBanner(conn net.Conn, timeout time.Duration) []byte {
+	conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 512)
+	n, _ := conn.Read(buf)
+	return buf[:n]
 }
 
 func DialUDP(ip string, port uint16) (net.Conn, error) {

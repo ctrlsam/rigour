@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { getHostByIP } from '../../../../lib/api';
+import { getHostByIP, getVulnsByIP } from '../../../../lib/api';
 import { formatDate, formatDateShort } from '../../../../lib/utils';
-import { Host } from '../../../../lib/types';
+import { Host, Vulnerability, SeverityLevel } from '../../../../lib/types';
 import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
@@ -17,7 +17,16 @@ import {
   CheckCircle,
   Wifi,
   Shield,
+  ShieldAlert,
 } from 'lucide-react';
+
+const SEVERITY_CLASSES: Record<SeverityLevel, string> = {
+  critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+  high:     'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  medium:   'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  low:      'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  info:     'bg-gray-500/20 text-gray-400 border-gray-500/30',
+};
 
 interface Params {
   slug: string;
@@ -30,10 +39,11 @@ export default async function HostDetailsPage({
 }) {
   const { slug } = await params;
   let host: Host | null = null;
+  let vulns: Vulnerability[] = [];
   let error: string | null = null;
 
   try {
-    host = await getHostByIP(slug);
+    [host, vulns] = await Promise.all([getHostByIP(slug), getVulnsByIP(slug)]);
   } catch (err) {
     console.error('Failed to fetch host:', err);
     error = err instanceof Error ? err.message : 'Failed to fetch host details';
@@ -41,7 +51,7 @@ export default async function HostDetailsPage({
 
   if (error || !host) {
     return (
-      <div className="min-h-screen bg-background p-6 dark">
+      <div className="p-6">
         <div className="max-w-6xl mx-auto">
           <div className="space-y-6">
             <Link href="/">
@@ -63,7 +73,7 @@ export default async function HostDetailsPage({
   }
 
   return (
-    <div className="min-h-screen bg-background p-6 dark">
+    <div className="p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -248,6 +258,17 @@ export default async function HostDetailsPage({
                             TLS
                           </Badge>
                         )}
+                        {(service.protocol === 'http' || service.protocol === 'https') && (
+                          <a
+                            href={`${service.tls || service.protocol === 'https' ? 'https' : 'http'}://${host.ip}:${service.port}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Open
+                          </a>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Wifi className="h-3 w-3" />
@@ -348,6 +369,51 @@ export default async function HostDetailsPage({
                         )}
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Vulnerabilities */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5" />
+              Vulnerabilities ({vulns.length})
+            </h3>
+          </CardHeader>
+          <CardContent>
+            {vulns.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No vulnerabilities found</p>
+            ) : (
+              <div className="space-y-3">
+                {vulns.map(vuln => (
+                  <div key={vuln.id} className="p-4 border border-border rounded-lg space-y-2 hover:border-primary/50 transition-colors">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Badge variant="outline" className={`text-xs px-2 py-0.5 uppercase font-semibold ${SEVERITY_CLASSES[vuln.severity]}`}>
+                        {vuln.severity}
+                      </Badge>
+                      <span className="text-sm font-medium">{vuln.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono">:{vuln.port}/{vuln.protocol}</span>
+                      {vuln.cvss !== undefined && vuln.cvss > 0 && (
+                        <span className="text-xs text-muted-foreground">CVSS {vuln.cvss.toFixed(1)}</span>
+                      )}
+                    </div>
+                    {vuln.description && (
+                      <p className="text-xs text-muted-foreground">{vuln.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {vuln.cve_ids && vuln.cve_ids.map(cve => (
+                        <span key={cve} className="text-xs font-mono bg-red-950/40 text-red-300 border border-red-800/40 rounded px-1.5 py-0.5">
+                          {cve}
+                        </span>
+                      ))}
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        Found {formatDateShort(vuln.discovered_at)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

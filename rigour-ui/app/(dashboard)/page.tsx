@@ -15,10 +15,13 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
   let hosts: Host[] = [];
   let facets: FacetCounts | undefined = undefined;
   let error: string | null = null;
+  let nextPageToken: string | undefined = undefined;
 
   try {
     // Build filter from search params
     const filter: Record<string, unknown> = {};
+
+    const pageToken = typeof searchParams.page_token === 'string' ? searchParams.page_token : undefined;
 
     // Parse filters from facet selections
     const selectedCountries = searchParams.countries
@@ -36,6 +39,11 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
         ? searchParams.services
         : searchParams.services.split(',')
       : [];
+    const selectedSeverities = searchParams.severity
+      ? Array.isArray(searchParams.severity)
+        ? searchParams.severity
+        : searchParams.severity.split(',')
+      : [];
 
     if (selectedCountries.length > 0) {
       filter['location.country_code'] = { $in: selectedCountries };
@@ -50,6 +58,12 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
       filter['services.protocol'] = { $in: selectedServices };
     }
 
+    if (selectedSeverities.length === 1) {
+      filter['vulns.max_severity'] = selectedSeverities[0];
+    } else if (selectedSeverities.length > 1) {
+      filter['vulns.max_severity'] = { $in: selectedSeverities };
+    }
+
     // Parse query syntax filters (e.g., from "services.protocol: ssh")
     if (searchParams.filter) {
       const filterParams = Array.isArray(searchParams.filter)
@@ -59,7 +73,6 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
       for (const filterParam of filterParams) {
         try {
           const parsedFilter = JSON.parse(filterParam);
-          // Merge with existing filter
           Object.assign(filter, parsedFilter);
         } catch (e) {
           console.error('Failed to parse filter parameter:', e);
@@ -67,9 +80,10 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
       }
     }
 
-    // Perform search
-    const searchResult = await searchHosts(filter, 50);
+    // Perform search — 10 hosts per page, cursor-based pagination
+    const searchResult = await searchHosts(filter, 10, pageToken);
     hosts = searchResult.hosts || [];
+    nextPageToken = searchResult.next_page_token;
 
     // Fetch facets for the current filter to show accurate counts
     const facetsResult = await getFacets(filter);
@@ -99,20 +113,17 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
 
   if (error) {
     return (
-      <div className="dark min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-red-500">Error: {error}</div>
-          <p className="text-sm text-gray-400 mt-2">
-            Make sure the API is running at {API_BASE_URL}
-          </p>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-red-500">Error: {error}</div>
+        <p className="text-sm text-gray-400 mt-2">
+          Make sure the API is running at {API_BASE_URL}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="dark min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <SearchHeader
           initialQuery={
             typeof searchParams.query === 'string' ? searchParams.query : ''
@@ -139,16 +150,25 @@ export default async function Home({ searchParams: searchParamsPromise }: PagePr
                   ? searchParams.services
                   : searchParams.services?.split(',') || []
               }
+              selectedSeverities={
+                Array.isArray(searchParams.severity)
+                  ? searchParams.severity
+                  : searchParams.severity?.split(',') || []
+              }
             />
             )}
           </aside>
 
           <main className="lg:col-span-4 space-y-6">
             {hosts.length > 0 && <WorldMap dots={mapDots} />}
-            <HostResults hosts={hosts} totalCount={hosts.length} />
+            <HostResults
+              hosts={hosts}
+              totalCount={hosts.length}
+              currentPage={parseInt(searchParams.page as string || '1', 10)}
+              nextPageToken={nextPageToken}
+            />
           </main>
         </div>
-      </div>
     </div>
   );
 }
